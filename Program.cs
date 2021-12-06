@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -8,45 +8,46 @@ namespace TextSearch
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static void Main()
         {
             try
             {
-                bool endApp = false;
+                //Stops the application from ending unless prompted by the user
+                var exitApp = new bool();
 
-                while (!endApp)
+
+                //Will loop forever until the user types; 'x' (see below for where this is assigned)
+                while (!exitApp)
                 {
+                    //Clear the screen
                     Console.Clear();
+
+                    //Display default path value in app.config file
                     var defaultPath = ConfigurationManager.AppSettings["DefaultPath"];
+                    WriteSummary("T E X T  - S E A R C H -  P R O G R A M");
 
-                    Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine($"Default path = {defaultPath}");
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine("Enter path to search or press Enter (or space then Enter) to use default path:");
-                    Console.ForegroundColor = ConsoleColor.White;
-                    var path = Console.ReadLine();
-                    path = path.Trim();
-                    if (string.IsNullOrEmpty(path))
-                    {
-                        path = defaultPath;
-                    }
+                    //Ask user for a file path or use default
+                    WritePrompt($"Type file path to search or press Enter key to use '{defaultPath}' as the default path:");
+                    var path = Console.ReadLine().Trim();
+                    path = string.IsNullOrEmpty(path) ? defaultPath : path;
 
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine("Enter part of file name:");
-                    Console.ForegroundColor = ConsoleColor.White;
-                    var fileName = Console.ReadLine();
-                    var filter = "*" + fileName + "*.*";
+                    //Ask user for file name using wildcards if necessary
+                    WritePrompt("Type file name or fuzzy search using '*' as a wildcard character (e.g. *my file*.* or *.txt - *.* is the default):");
+                    var filter = Console.ReadLine();
+                    filter = string.IsNullOrEmpty(filter) ? "*.*" : filter;
 
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine("Enter text to search for:");
-                    Console.ForegroundColor = ConsoleColor.White;
+                    //Ask user for text to search for
+                    WritePrompt("Type text to search for:");
                     var searchValue = Console.ReadLine();
 
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine($"Searching for: '{searchValue}', using file filter: '{filter}' and path: '{path}'.  Please wait...");
+                    //Let user know what's about to happen...
+                    WriteInfo($"Searching for text: '{searchValue}' within files named: '{filter}' and located in: '{path}', please wait...", true);
 
+                    //Create and start a stopwatch for the stats purposes
                     var sw = new Stopwatch();
                     sw.Start();
+
+                    //Search folder, subfolders and files for the text and add each of the results to a list...
                     var results = (from file in Directory.EnumerateFiles(path, filter, SearchOption.AllDirectories)
                                    from line in File.ReadLines(file)
                                    where line.Contains(searchValue)
@@ -55,30 +56,43 @@ namespace TextSearch
                                        FileName = file
                                    }).ToList();
 
+                    //Filter the results so we don't show duplicates
                     var resultsFiltered = results.GroupBy(x => x.FileName).Select(y => y).ToList();
+                    
+                    //Stop the stopwatch
                     sw.Stop();
-                    Console.ForegroundColor = ConsoleColor.Yellow;
-                    Console.WriteLine($"Found '{searchValue}', {results.Count()} times within {resultsFiltered.Count()} files in {ConvertMilliseconds(sw.ElapsedMilliseconds)}");
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.WriteLine("Listing files:");
-                    Console.ForegroundColor = ConsoleColor.White;
+
+                    //Display results summary as a headline, just to be dramatic!
+                    WriteInfo("S E A R C H - R E S U L T S:", true);
+                    WriteSummary($"Searched for   : {searchValue}");
+                    WriteSummary($"Total text hits: {results.Count()}");
+                    WriteSummary($"Total file hits: {resultsFiltered.Count()}");
+                    WriteSummary($"Processing time: {ConvertMilliseconds(sw.ElapsedMilliseconds)}");
+
+                    //Display results header information
+                    WriteInfo($"No.   Path", true);
+                    WriteInfo("----- ----");
+
+                    //Display the results (without duplicates)
                     var count = 0;
                     foreach (var result in resultsFiltered)
                     {
                         count++;
-                        Console.WriteLine("#" + count.ToString("D5") + " - " + result.Key);
+                        WriteOutput(count.ToString("D5") + " " + result.Key);
                     }
-                    Console.ForegroundColor = ConsoleColor.Cyan;
-                    Console.Write("Press 'x' and Enter to close the app, or press any other key and Enter to continue: ");
-                    if (Console.ReadLine() == "x") endApp = true;
+
+                    //Prompt user to continue with a new search or exit
+                    WritePrompt("Press 'x' and Enter to close the app, or press any other key and Enter to continue: ", true);
+
+                    //If user entered 'x' then exit the application
+                    if (Console.ReadLine() == "x") exitApp = true;
                 }
 
             }
             catch (Exception e)
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine(e.Message);
-                Console.WriteLine(e.ToString());
+                //Using 'ToString()' on an error object returns the full information including the message and the call stack, this is very handy for resolving issues.
+                WriteError(e.ToString(), true);
             }
         }
 
@@ -86,11 +100,63 @@ namespace TextSearch
         {
             //Taken from: https://stackoverflow.com/a/9994060
             TimeSpan t = TimeSpan.FromMilliseconds(ms);
-            string answer = string.Format("{0:D2} minutes, {1:D2} seconds and {2:D3} millisecsonds",
+            string answer = string.Format("{0:D2} minutes, {1:D2} seconds and {2:D3} milliseconds",
                                     t.Minutes,
                                     t.Seconds,
                                     t.Milliseconds);
             return answer;
+        }
+
+        private static void WriteInfo(string message, bool newLine = false)
+        {
+            if (newLine) NewLine();
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine(message);
+            ResetConsoleForeColour();
+        }
+
+        private static void WritePrompt(string message, bool newLine = false)
+        {
+            if (newLine) NewLine();
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine(message);
+            ResetConsoleForeColour();
+        }
+
+        private static void WriteOutput(string message, bool newLine = false)
+        {
+            if (newLine) NewLine();
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine(message);
+            ResetConsoleForeColour();
+        }
+
+        private static void WriteError(string message, bool newLine = false)
+        {
+            if (newLine) NewLine();
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine(message);
+            ResetConsoleForeColour();
+        }
+
+        private static void WriteSummary(string message, bool newLine = false)
+        {
+            if (newLine) NewLine();
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine(message);
+            ResetConsoleForeColour();
+        }
+
+        private static void ResetConsoleForeColour()
+        {
+            //Always reset console font colour back to neutral white
+            Console.ForegroundColor = ConsoleColor.White;
+        }
+
+        private static void NewLine()
+        {
+            //Always reset console font colour back to neutral white
+            Console.WriteLine(Environment.NewLine);
         }
     }
 }
